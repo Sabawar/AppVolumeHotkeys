@@ -51,6 +51,12 @@ The three hotkeys apply to all checked apps:
 
 Enable `Special volume control button controls the active checked app` to intercept standard Windows volume keys. The active foreground app is controlled only when its process is checked in the target list.
 
+When enabling this option, the app can run a guided setup. It temporarily enables keyboard logging, asks you to use volume up, volume down, and mute actions, then saves the detected key codes when Windows exposes them through the keyboard hook.
+
+## Updates
+
+The app checks GitHub Releases on startup and can also check manually from the tray menu. If a newer version is available, the app can download the latest `AppVolumeHotkeys.exe`, replace the current executable, and restart.
+
 ## Portable Files
 
 The app stores files next to the executable:

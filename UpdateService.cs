@@ -10,7 +10,8 @@ internal sealed record UpdateCheckResult(
     string CurrentVersion,
     string LatestVersion,
     string ReleaseUrl,
-    string ReleaseName);
+    string ReleaseName,
+    string AssetDownloadUrl);
 
 internal static class UpdateService
 {
@@ -39,17 +40,74 @@ internal static class UpdateService
             current,
             latest,
             release.HtmlUrl,
-            string.IsNullOrWhiteSpace(release.Name) ? release.TagName : release.Name);
+            string.IsNullOrWhiteSpace(release.Name) ? release.TagName : release.Name,
+            release.Assets.FirstOrDefault(asset => asset.Name.Equals("AppVolumeHotkeys.exe", StringComparison.OrdinalIgnoreCase))?.BrowserDownloadUrl ?? string.Empty);
     }
 
-    public static void OpenRelease(string releaseUrl)
+    public static async Task<string> DownloadUpdateAsync(UpdateCheckResult update, IProgress<int>? progress = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(releaseUrl))
+        if (string.IsNullOrWhiteSpace(update.AssetDownloadUrl))
         {
-            return;
+            throw new InvalidOperationException("Release does not contain AppVolumeHotkeys.exe.");
         }
 
-        Process.Start(new ProcessStartInfo(releaseUrl) { UseShellExecute = true });
+        var targetPath = Path.Combine(Path.GetTempPath(), $"AppVolumeHotkeys-{update.LatestVersion}.exe");
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("AppVolumeHotkeys");
+        using var response = await client.GetAsync(update.AssetDownloadUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        var totalLength = response.Content.Headers.ContentLength;
+        await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await using var output = File.Create(targetPath);
+
+        var buffer = new byte[1024 * 128];
+        long readTotal = 0;
+        while (true)
+        {
+            var read = await input.ReadAsync(buffer, cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+            readTotal += read;
+            if (totalLength is > 0)
+            {
+                progress?.Report((int)Math.Clamp(readTotal * 100 / totalLength.Value, 0, 100));
+            }
+        }
+
+        progress?.Report(100);
+        return targetPath;
+    }
+
+    public static void InstallAndRestart(string downloadedExePath)
+    {
+        var currentExe = Environment.ProcessPath ?? Application.ExecutablePath;
+        var scriptPath = Path.Combine(Path.GetTempPath(), $"AppVolumeHotkeys-update-{Guid.NewGuid():N}.cmd");
+        var processId = Environment.ProcessId;
+        var script = $"""
+@echo off
+setlocal
+set "SRC={downloadedExePath}"
+set "DST={currentExe}"
+set "PID={processId}"
+:wait
+tasklist /FI "PID eq %PID%" | find "%PID%" >nul
+if not errorlevel 1 (
+  timeout /t 1 /nobreak >nul
+  goto wait
+)
+copy /Y "%SRC%" "%DST%" >nul
+start "" "%DST%"
+del "%SRC%" >nul 2>nul
+del "%~f0" >nul 2>nul
+""";
+        File.WriteAllText(scriptPath, script);
+        Process.Start(new ProcessStartInfo(scriptPath) { UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden });
+        Application.Exit();
     }
 
     private static string GetCurrentVersion()
@@ -87,5 +145,17 @@ internal static class UpdateService
 
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("assets")]
+        public List<GitHubAsset> Assets { get; set; } = [];
+    }
+
+    private sealed class GitHubAsset
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = string.Empty;
+
+        [JsonPropertyName("browser_download_url")]
+        public string BrowserDownloadUrl { get; set; } = string.Empty;
     }
 }

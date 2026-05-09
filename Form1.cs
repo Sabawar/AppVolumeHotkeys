@@ -44,6 +44,7 @@ public partial class Form1 : Form
     private bool _initialVisibilityHandled;
     private bool _isLoadingUi;
     private bool _isRefreshingSessions;
+    private bool _isCalibratingHardwareKeys;
     private bool _isExiting;
 
     public Form1(bool startMinimized)
@@ -196,7 +197,7 @@ public partial class Form1 : Form
 
         _routeHardwareVolumeCheckBox.Tag = "HardwareVolume";
         _routeHardwareVolumeCheckBox.Dock = DockStyle.Fill;
-        _routeHardwareVolumeCheckBox.CheckedChanged += (_, _) => SaveSettingsFromUi(registerHotkeys: false);
+        _routeHardwareVolumeCheckBox.CheckedChanged += async (_, _) => await OnHardwareVolumeRoutingChangedAsync();
         optionsPanel.Controls.Add(_routeHardwareVolumeCheckBox, 1, 3);
         optionsPanel.SetColumnSpan(_routeHardwareVolumeCheckBox, 2);
 
@@ -338,6 +339,7 @@ public partial class Form1 : Form
     {
         _hardwareVolumeKeyRouter.Enabled = _settings.RouteHardwareVolumeKeysToActiveProfile;
         _hardwareVolumeKeyRouter.LogKeyboardEvents = _settings.LogKeyboardEvents;
+        ApplyHardwareKeySettings();
         _hardwareVolumeKeyRouter.VolumeKeyPressed += (_, e) =>
         {
             if (IsDisposed || !IsHandleCreated)
@@ -348,6 +350,13 @@ public partial class Form1 : Form
             BeginInvoke(new Action(() => HandleHardwareVolumeAction(e.Action)));
         };
         _hardwareVolumeKeyRouter.Start();
+    }
+
+    private void ApplyHardwareKeySettings()
+    {
+        _hardwareVolumeKeyRouter.VolumeUpVkCode = _settings.HardwareVolumeUpVkCode;
+        _hardwareVolumeKeyRouter.VolumeDownVkCode = _settings.HardwareVolumeDownVkCode;
+        _hardwareVolumeKeyRouter.VolumeMuteVkCode = _settings.HardwareVolumeMuteVkCode;
     }
 
     private void LoadSettingsIntoUi()
@@ -504,13 +513,13 @@ public partial class Form1 : Form
             if (result.IsUpdateAvailable)
             {
                 var answer = MessageBox.Show(
-                    Localizer.Format("UpdateAvailableText", result.LatestVersion, result.CurrentVersion),
+                    Localizer.Format("InstallUpdateText", result.LatestVersion, result.CurrentVersion),
                     Localizer.T("UpdateAvailableTitle"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Information);
                 if (answer == DialogResult.Yes)
                 {
-                    UpdateService.OpenRelease(result.ReleaseUrl);
+                    await InstallUpdateAsync(result);
                 }
 
                 return;
@@ -536,6 +545,114 @@ public partial class Form1 : Form
                     MessageBoxIcon.Warning);
             }
         }
+    }
+
+    private async Task InstallUpdateAsync(UpdateCheckResult result)
+    {
+        try
+        {
+            var progress = new Progress<int>(percent => SetStatus(Localizer.Format("DownloadingUpdate", percent)));
+            var downloadedExe = await UpdateService.DownloadUpdateAsync(result, progress);
+            UpdateService.InstallAndRestart(downloadedExe);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                Localizer.Format("UpdateInstallFailed", ex.Message),
+                Localizer.T("UpdateAvailableTitle"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+    }
+
+    private async Task OnHardwareVolumeRoutingChangedAsync()
+    {
+        if (_isLoadingUi || _isCalibratingHardwareKeys)
+        {
+            return;
+        }
+
+        if (_routeHardwareVolumeCheckBox.Checked)
+        {
+            var answer = MessageBox.Show(
+                Localizer.T("HardwareCalibrationIntro"),
+                Localizer.T("HardwareCalibrationTitle"),
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (answer == DialogResult.Yes)
+            {
+                await CalibrateHardwareVolumeKeysAsync();
+            }
+        }
+
+        SaveSettingsFromUi(registerHotkeys: false);
+    }
+
+    private async Task CalibrateHardwareVolumeKeysAsync()
+    {
+        _isCalibratingHardwareKeys = true;
+        var previousLogging = _settings.LogKeyboardEvents;
+        _settings.LogKeyboardEvents = true;
+        _logKeyboardCheckBox.Checked = true;
+        _hardwareVolumeKeyRouter.LogKeyboardEvents = true;
+
+        try
+        {
+            _settings.HardwareVolumeUpVkCode = await DetectHardwareKeyAsync(Localizer.T("ActionUp"));
+            _settings.HardwareVolumeDownVkCode = await DetectHardwareKeyAsync(Localizer.T("ActionDown"));
+            _settings.HardwareVolumeMuteVkCode = await DetectHardwareKeyAsync("mute");
+            ApplyHardwareKeySettings();
+            AppSettingsStore.Save(_settings);
+            MessageBox.Show(Localizer.T("HardwareCalibrationDone"), Localizer.T("HardwareCalibrationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        finally
+        {
+            _isCalibratingHardwareKeys = false;
+            _settings.LogKeyboardEvents = previousLogging || _logKeyboardCheckBox.Checked;
+            _hardwareVolumeKeyRouter.LogKeyboardEvents = _settings.LogKeyboardEvents;
+        }
+    }
+
+    private async Task<int?> DetectHardwareKeyAsync(string actionName)
+    {
+        var events = new List<KeyboardEventInfo>();
+        void Handler(object? _, KeyboardEventInfo info) => events.Add(info);
+
+        MessageBox.Show(
+            Localizer.Format("HardwareCalibrationStep", actionName),
+            Localizer.T("HardwareCalibrationTitle"),
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+
+        _hardwareVolumeKeyRouter.KeyboardEventObserved += Handler;
+        try
+        {
+            await Task.Delay(5000);
+        }
+        finally
+        {
+            _hardwareVolumeKeyRouter.KeyboardEventObserved -= Handler;
+        }
+
+        var detected = events
+            .Where(item => item.VkCode is not ((int)Keys.ControlKey) and not ((int)Keys.ShiftKey) and not ((int)Keys.Menu))
+            .GroupBy(item => item.VkCode)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.First())
+            .FirstOrDefault();
+
+        if (detected is null)
+        {
+            MessageBox.Show(Localizer.Format("HardwareCalibrationNotFound", actionName), Localizer.T("HardwareCalibrationTitle"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return null;
+        }
+
+        MessageBox.Show(
+            Localizer.Format("HardwareCalibrationFound", actionName, detected.KeyName, detected.VkCode),
+            Localizer.T("HardwareCalibrationTitle"),
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+        return detected.VkCode;
     }
 
     private void SelectGridProcess()
@@ -647,6 +764,7 @@ public partial class Form1 : Form
 
         _hardwareVolumeKeyRouter.Enabled = _settings.RouteHardwareVolumeKeysToActiveProfile;
         _hardwareVolumeKeyRouter.LogKeyboardEvents = _settings.LogKeyboardEvents;
+        ApplyHardwareKeySettings();
         AppSettingsStore.Save(_settings);
         ApplyAutoStartSetting();
 

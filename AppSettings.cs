@@ -10,6 +10,9 @@ internal sealed class AppSettings
     public bool StartWithWindows { get; set; }
     public bool RouteHardwareVolumeKeysToActiveProfile { get; set; }
     public bool LogKeyboardEvents { get; set; }
+    public int? HardwareVolumeUpVkCode { get; set; }
+    public int? HardwareVolumeDownVkCode { get; set; }
+    public int? HardwareVolumeMuteVkCode { get; set; }
     public HotkeySetting VolumeUp { get; set; } = HotkeySetting.FromDefinition(new HotkeyDefinition(Keys.Up, HotkeyModifiers.Control | HotkeyModifiers.Alt));
     public HotkeySetting VolumeDown { get; set; } = HotkeySetting.FromDefinition(new HotkeyDefinition(Keys.Down, HotkeyModifiers.Control | HotkeyModifiers.Alt));
     public HotkeySetting ToggleMute { get; set; } = HotkeySetting.FromDefinition(new HotkeyDefinition(Keys.M, HotkeyModifiers.Control | HotkeyModifiers.Alt));

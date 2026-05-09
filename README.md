@@ -13,6 +13,9 @@ Portable Windows tray app for controlling per-application volume with global hot
 - UI language selection: system default, English, Russian, Chinese, German, Spanish, French, Portuguese.
 - Self-contained single-file Windows build, no separate .NET runtime installation required.
 - Automatic update checks against GitHub Releases at startup and manual update checks from the tray menu.
+- One-click self-update: when a newer release is found, the app can download the latest exe, replace itself, and restart.
+- Embedded application icon for Explorer, taskbar, tray, and window usage.
+- Guided setup for the special volume control button using temporary keyboard logging and automatic key detection.
 
 ## Author
 

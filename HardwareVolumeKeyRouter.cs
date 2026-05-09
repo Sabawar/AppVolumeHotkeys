@@ -18,8 +18,12 @@ internal sealed class HardwareVolumeKeyRouter : IDisposable
 
     public bool Enabled { get; set; }
     public bool LogKeyboardEvents { get; set; }
+    public int? VolumeUpVkCode { get; set; }
+    public int? VolumeDownVkCode { get; set; }
+    public int? VolumeMuteVkCode { get; set; }
 
     public event EventHandler<HardwareVolumeKeyEventArgs>? VolumeKeyPressed;
+    public event EventHandler<KeyboardEventInfo>? KeyboardEventObserved;
 
     public HardwareVolumeKeyRouter()
     {
@@ -66,24 +70,43 @@ internal sealed class HardwareVolumeKeyRouter : IDisposable
             LogKeyboardEvent(message, data);
         }
 
-        if (Enabled && nCode >= 0 && (message == WmKeyDown || message == WmSysKeyDown))
+        if (nCode >= 0 && (message == WmKeyDown || message == WmSysKeyDown))
         {
-            var action = data.VkCode switch
-            {
-                VkVolumeUp => HardwareVolumeAction.Up,
-                VkVolumeDown => HardwareVolumeAction.Down,
-                VkVolumeMute => HardwareVolumeAction.ToggleMute,
-                _ => HardwareVolumeAction.None
-            };
+            var keyInfo = new KeyboardEventInfo(data.VkCode, data.ScanCode, data.Flags, GetKeyName(data.VkCode));
+            KeyboardEventObserved?.Invoke(this, keyInfo);
 
+            var action = ResolveAction(data.VkCode);
             if (action != HardwareVolumeAction.None)
             {
-                VolumeKeyPressed?.Invoke(this, new HardwareVolumeKeyEventArgs(action));
-                return new IntPtr(1);
+                if (Enabled)
+                {
+                    VolumeKeyPressed?.Invoke(this, new HardwareVolumeKeyEventArgs(action));
+                    return new IntPtr(1);
+                }
             }
         }
 
         return CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+    }
+
+    private HardwareVolumeAction ResolveAction(int vkCode)
+    {
+        if (VolumeUpVkCode == vkCode || vkCode == VkVolumeUp)
+        {
+            return HardwareVolumeAction.Up;
+        }
+
+        if (VolumeDownVkCode == vkCode || vkCode == VkVolumeDown)
+        {
+            return HardwareVolumeAction.Down;
+        }
+
+        if (VolumeMuteVkCode == vkCode || vkCode == VkVolumeMute)
+        {
+            return HardwareVolumeAction.ToggleMute;
+        }
+
+        return HardwareVolumeAction.None;
     }
 
     private static void LogKeyboardEvent(int message, KbdLlHookStruct data)
@@ -91,9 +114,7 @@ internal sealed class HardwareVolumeKeyRouter : IDisposable
         try
         {
             Directory.CreateDirectory(AppPaths.DataDirectory);
-            var keyName = Enum.IsDefined(typeof(Keys), data.VkCode)
-                ? ((Keys)data.VkCode).ToString()
-                : "Unknown";
+            var keyName = GetKeyName(data.VkCode);
             var line = string.Join(
                 " | ",
                 DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss.fff zzz"),
@@ -109,6 +130,13 @@ internal sealed class HardwareVolumeKeyRouter : IDisposable
         {
             // Diagnostics must never break the hook chain.
         }
+    }
+
+    private static string GetKeyName(int vkCode)
+    {
+        return Enum.IsDefined(typeof(Keys), vkCode)
+            ? ((Keys)vkCode).ToString()
+            : "Unknown";
     }
 
     private static string GetMessageName(int message)
@@ -160,3 +188,5 @@ internal sealed class HardwareVolumeKeyEventArgs(HardwareVolumeAction action) : 
 {
     public HardwareVolumeAction Action { get; } = action;
 }
+
+internal sealed record KeyboardEventInfo(int VkCode, int ScanCode, int Flags, string KeyName);
