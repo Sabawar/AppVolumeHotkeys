@@ -21,6 +21,17 @@ The executable will be created at:
 publish-self-contained\AppVolumeHotkeys.exe
 ```
 
+## Release Automation
+
+The GitHub Actions workflow builds on every push and pull request. To publish a release, update the project version, commit the fix, and push a tag:
+
+```powershell
+git tag v1.1.0
+git push origin main v1.1.0
+```
+
+The workflow creates a GitHub Release automatically, generates release notes from the commit history, and uploads the self-contained `AppVolumeHotkeys.exe`.
+
 ## Usage
 
 1. Run `AppVolumeHotkeys.exe`.

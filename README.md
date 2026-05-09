@@ -12,6 +12,7 @@ Portable Windows tray app for controlling per-application volume with global hot
 - Portable settings and keyboard logs stored next to `AppVolumeHotkeys.exe`.
 - UI language selection: system default, English, Russian, Chinese, German, Spanish, French, Portuguese.
 - Self-contained single-file Windows build, no separate .NET runtime installation required.
+- Automatic update checks against GitHub Releases at startup and manual update checks from the tray menu.
 
 ## Author
 
@@ -19,7 +20,7 @@ Created by Saba.
 
 ## Downloads
 
-GitHub Actions builds a `win-x64` self-contained artifact on every push and pull request.
+GitHub Actions builds a `win-x64` self-contained artifact on every push and pull request. Pushing a tag like `v1.1.0` automatically creates a GitHub Release with generated notes and uploads `AppVolumeHotkeys.exe`.
 
 ## Documentation
 

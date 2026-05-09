@@ -9,6 +9,10 @@
     <Authors>Saba</Authors>
     <Company>Saba</Company>
     <Product>App Volume Hotkeys</Product>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+    <InformationalVersion>1.1.0</InformationalVersion>
     <Description>Portable Windows tray app for per-application volume hotkeys.</Description>
     <Copyright>Copyright (c) 2026 Saba</Copyright>
   </PropertyGroup>

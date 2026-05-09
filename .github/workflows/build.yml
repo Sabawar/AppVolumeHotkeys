@@ -3,8 +3,12 @@ name: Build
 on:
   push:
     branches: ["main", "master"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-win-x64:
@@ -33,3 +37,10 @@ jobs:
         with:
           name: AppVolumeHotkeys-win-x64
           path: publish-self-contained/AppVolumeHotkeys.exe
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME publish-self-contained/AppVolumeHotkeys.exe --title "App Volume Hotkeys $env:GITHUB_REF_NAME" --generate-notes

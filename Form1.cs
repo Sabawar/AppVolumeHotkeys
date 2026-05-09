@@ -34,6 +34,7 @@ public partial class Form1 : Form
     private readonly CheckBox _logKeyboardCheckBox = new();
     private readonly Label _statusLabel = new();
     private readonly System.Windows.Forms.Timer _refreshTimer = new();
+    private readonly System.Windows.Forms.Timer _updateCheckTimer = new();
     private readonly Icon _appIcon = AppIconFactory.CreateIcon();
     private readonly OverlayForm _overlayForm = new();
     private readonly HardwareVolumeKeyRouter _hardwareVolumeKeyRouter = new();
@@ -75,6 +76,14 @@ public partial class Form1 : Form
         _refreshTimer.Interval = 5000;
         _refreshTimer.Tick += (_, _) => RefreshSessions(keepStatus: true);
         _refreshTimer.Start();
+
+        _updateCheckTimer.Interval = 3000;
+        _updateCheckTimer.Tick += async (_, _) =>
+        {
+            _updateCheckTimer.Stop();
+            await CheckForUpdatesAsync(showNoUpdateMessage: false);
+        };
+        _updateCheckTimer.Start();
     }
 
     protected override void WndProc(ref Message m)
@@ -118,6 +127,8 @@ public partial class Form1 : Form
 
         SaveSettingsFromUi(registerHotkeys: true);
         UnregisterAllHotkeys();
+        _updateCheckTimer.Stop();
+        _refreshTimer.Stop();
         _hardwareVolumeKeyRouter.Dispose();
         _notifyIcon?.Dispose();
         _overlayForm.Dispose();
@@ -302,10 +313,12 @@ public partial class Form1 : Form
         _trayMenu.Items[0].Click += (_, _) => ShowMainWindow();
         _trayMenu.Items.Add(new ToolStripMenuItem { Tag = "RefreshSessions" });
         _trayMenu.Items[1].Click += (_, _) => RefreshSessions();
+        _trayMenu.Items.Add(new ToolStripMenuItem { Tag = "CheckUpdates" });
+        _trayMenu.Items[2].Click += async (_, _) => await CheckForUpdatesAsync(showNoUpdateMessage: true);
         _trayMenu.Items.Add(new ToolStripMenuItem { Tag = "About" });
-        _trayMenu.Items[2].Click += (_, _) => MessageBox.Show(Localizer.T("AboutText"), "App Volume Hotkeys", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        _trayMenu.Items[3].Click += (_, _) => MessageBox.Show(Localizer.T("AboutText"), "App Volume Hotkeys", MessageBoxButtons.OK, MessageBoxIcon.Information);
         _trayMenu.Items.Add(new ToolStripMenuItem { Tag = "Exit" });
-        _trayMenu.Items[3].Click += (_, _) =>
+        _trayMenu.Items[4].Click += (_, _) =>
         {
             _isExiting = true;
             Close();
@@ -480,6 +493,48 @@ public partial class Form1 : Form
         finally
         {
             _isRefreshingSessions = false;
+        }
+    }
+
+    private async Task CheckForUpdatesAsync(bool showNoUpdateMessage)
+    {
+        try
+        {
+            var result = await UpdateService.CheckLatestAsync();
+            if (result.IsUpdateAvailable)
+            {
+                var answer = MessageBox.Show(
+                    Localizer.Format("UpdateAvailableText", result.LatestVersion, result.CurrentVersion),
+                    Localizer.T("UpdateAvailableTitle"),
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information);
+                if (answer == DialogResult.Yes)
+                {
+                    UpdateService.OpenRelease(result.ReleaseUrl);
+                }
+
+                return;
+            }
+
+            if (showNoUpdateMessage)
+            {
+                MessageBox.Show(
+                    Localizer.Format("NoUpdateText", result.CurrentVersion),
+                    Localizer.T("NoUpdateTitle"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (showNoUpdateMessage)
+            {
+                MessageBox.Show(
+                    Localizer.Format("UpdateCheckFailed", ex.Message),
+                    Localizer.T("NoUpdateTitle"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
     }
 

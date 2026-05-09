@@ -21,6 +21,17 @@ dotnet publish AppVolumeHotkeys.csproj -c Release -r win-x64 --self-contained tr
 publish-self-contained\AppVolumeHotkeys.exe
 ```
 
+## Автоматизация релизов
+
+GitHub Actions собирает проект при каждом push и pull request. Чтобы опубликовать релиз, обнови версию проекта, закоммить исправление и отправь тег:
+
+```powershell
+git tag v1.1.0
+git push origin main v1.1.0
+```
+
+Workflow сам создаст GitHub Release, сгенерирует описание по истории коммитов и загрузит self-contained `AppVolumeHotkeys.exe`.
+
 ## Использование
 
 1. Запусти `AppVolumeHotkeys.exe`.
