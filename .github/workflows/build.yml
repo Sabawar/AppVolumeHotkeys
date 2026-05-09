@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-win-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore AppVolumeHotkeys.csproj
+
+      - name: Build
+        run: dotnet build AppVolumeHotkeys.csproj -c Release --no-restore
+
+      - name: Publish self-contained
+        run: dotnet publish AppVolumeHotkeys.csproj -c Release -r win-x64 --self-contained true -o publish-self-contained /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppVolumeHotkeys-win-x64
+          path: publish-self-contained/AppVolumeHotkeys.exe

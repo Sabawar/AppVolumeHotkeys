@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Authors>Saba</Authors>
+    <Company>Saba</Company>
+    <Product>App Volume Hotkeys</Product>
+    <Description>Portable Windows tray app for per-application volume hotkeys.</Description>
+    <Copyright>Copyright (c) 2026 Saba</Copyright>
+  </PropertyGroup>
+
+</Project>
