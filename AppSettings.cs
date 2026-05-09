@@ -73,6 +73,7 @@ internal static class AppSettingsStore
                 if (!string.IsNullOrWhiteSpace(legacyPath) && File.Exists(legacyPath))
                 {
                     var migrated = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(legacyPath)) ?? new AppSettings();
+                    migrated.RouteHardwareVolumeKeysToActiveProfile = false;
                     Save(migrated);
                     return migrated;
                 }
